@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: ./back
+      dockerfile: Dockerfile
+    container_name: real_estate_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/real_estate
+    volumes:
+      - ./back:/app
+      - backend_models:/app/models
+      - backend_data:/app/data
+    depends_on:
+      - db
+      - mlflow
+    restart: unless-stopped
+    networks:
+      - app_network
+
+  # Frontend
+  frontend:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+    container_name: real_estate_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - app_network
+
+  # MLflow Tracking Server
+  mlflow:
+    image: python:3.11-slim
+    container_name: mlflow_server
+    ports:
+      - "5000:5000"
+    working_dir: /mlflow
+    environment:
+      - BACKEND_STORE_URI=postgresql://postgres:postgres@db:5432/mlflow
+      - ARTIFACT_ROOT=/mlflow/artifacts
+    volumes:
+      - mlflow_data:/mlflow
+    command: >
+      bash -c "
+      pip install mlflow psycopg2-binary &&
+      mlflow server 
+      --backend-store-uri postgresql://postgres:postgres@db:5432/mlflow 
+      --default-artifact-root /mlflow/artifacts 
+      --host 0.0.0.0 
+      --port 5000
+      "
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - app_network
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: real_estate_db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=real_estate
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - app_network
+
+  # ML Training (run manually)
+  ml_training:
+    build:
+      context: ./ML
+      dockerfile: Dockerfile
+    container_name: ml_training
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - ./ML:/app
+      - ml_data:/app/data
+      - backend_models:/app/models
+    depends_on:
+      - mlflow
+    profiles:
+      - training
+    networks:
+      - app_network
+
+volumes:
+  postgres_data:
+  mlflow_data:
+  backend_models:
+  backend_data:
+  ml_data:
+
+networks:
+  app_network:
+    driver: bridge
