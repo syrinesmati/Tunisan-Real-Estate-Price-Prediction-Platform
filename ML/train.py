@@ -83,14 +83,14 @@ class RealEstatePipeline:
         print(f"✅ Loaded {len(df)} rows")
         return df
     
-    def prepare_data(self, df: pd.DataFrame, transaction_type: str = 'all'):
+    def prepare_data(self, df: pd.DataFrame, transaction: str = 'all'):
         """Prepare data for training"""
-        print(f"\n🔧 Preprocessing data for transaction type: {transaction_type}")
+        print(f"\n🔧 Preprocessing data for transaction type: {transaction}")
         
         # Filter by transaction type if specified
-        if transaction_type != 'all':
-            df = df[df['transaction_type'] == transaction_type].copy()
-            print(f"  Filtered to {len(df)} {transaction_type} properties")
+        if transaction != 'all':
+            df = df[df['transaction'] == transaction].copy()
+            print(f"  Filtered to {len(df)} {transaction} properties")
         
         # Preprocess
         df_clean = self.preprocessor.clean_data(df)
@@ -142,15 +142,15 @@ class RealEstatePipeline:
             
             return metrics
     
-    def run_experiment(self, data_path: str, transaction_type: str = 'all'):
+    def run_experiment(self, data_path: str, transaction: str = 'all'):
         """Run complete experiment"""
         print(f"\n{'='*60}")
-        print(f"🚀 Starting ML Experiment: {transaction_type.upper()}")
+        print(f"🚀 Starting ML Experiment: {transaction.upper()}")
         print(f"{'='*60}")
         
         # Load and prepare data
         df = self.load_data(data_path)
-        X_train, X_test, y_train, y_test = self.prepare_data(df, transaction_type)
+        X_train, X_test, y_train, y_test = self.prepare_data(df, transaction)
         
         print(f"\n📊 Dataset Summary:")
         print(f"  Training samples: {len(X_train)}")
@@ -203,12 +203,12 @@ def main():
     print("\n" + "="*60)
     print("🏠 TRAINING MODELS FOR SALE PROPERTIES")
     print("="*60)
-    pipeline.run_experiment(str(data_path), transaction_type='sale')
+    pipeline.run_experiment(str(data_path), transaction='sale')
     
     print("\n" + "="*60)
     print("🏠 TRAINING MODELS FOR RENT PROPERTIES")
     print("="*60)
-    pipeline.run_experiment(str(data_path), transaction_type='rent')
+    pipeline.run_experiment(str(data_path), transaction='rent')
     
     print("\n✅ All experiments completed!")
     print(f"📊 View results at: {MLFLOW_TRACKING_URI}")
