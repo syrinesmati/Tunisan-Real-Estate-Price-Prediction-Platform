@@ -10,6 +10,13 @@ import mlflow.sklearn
 from datetime import datetime
 from pathlib import Path
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not installed, will use system env vars only
+
 # Import models
 from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from sklearn.tree import DecisionTreeRegressor
@@ -19,6 +26,7 @@ from lightgbm import LGBMRegressor
 
 # Import metrics
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split
 
 # Configuration
 MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://localhost:5000')
@@ -33,16 +41,24 @@ DATA_MODE = os.getenv("DATA_MODE", "auto").lower()
 combined_data_dir = BASE_DIR / "data" / "combined"
 prepared_v3_dir = BASE_DIR / "data" / f"prepared_{DATA_VERSION}"
 prepared_v2_dir = BASE_DIR / "data" / "prepared"
+clustered_rent_path = BASE_DIR / "data" / "processed" / "rent_clustered.csv"
+clustered_sale_path = BASE_DIR / "data" / "processed" / "sale_clustered.csv"
 
-if combined_data_dir.exists():
-    DATA_DIR = BASE_DIR / "data"
-    DATA_MODE = "combined"
-elif prepared_v3_dir.exists():
-    DATA_DIR = prepared_v3_dir
-elif prepared_v2_dir.exists():
-    DATA_DIR = prepared_v2_dir
+# Set DATA_DIR based on what exists (only if DATA_MODE is not explicitly set to 'clustered')
+if DATA_MODE != "clustered":
+    if combined_data_dir.exists():
+        DATA_DIR = BASE_DIR / "data"
+        if DATA_MODE == "auto":
+            DATA_MODE = "combined"
+    elif prepared_v3_dir.exists():
+        DATA_DIR = prepared_v3_dir
+    elif prepared_v2_dir.exists():
+        DATA_DIR = prepared_v2_dir
+    else:
+        DATA_DIR = BASE_DIR / "data" / f"prepared_{DATA_VERSION}"
 else:
-    DATA_DIR = BASE_DIR / "data" / f"prepared_{DATA_VERSION}"
+    # For clustered mode, DATA_DIR is not used (we use direct paths)
+    DATA_DIR = BASE_DIR / "data"
 
 MODELS_DIR = BASE_DIR / "models"
 
@@ -59,6 +75,9 @@ def detect_dataset_mode(data_dir: Path) -> str:
     rent_dir = data_dir / "rent"
     sale_dir = data_dir / "sale"
 
+    if clustered_rent_path.exists() and clustered_sale_path.exists():
+        return "clustered"
+
     if combined_dir.exists():
         return "combined"
     if rent_dir.exists() and sale_dir.exists():
@@ -66,6 +85,52 @@ def detect_dataset_mode(data_dir: Path) -> str:
     if (data_dir / "X_train.npy").exists():
         return "combined"
     return "unknown"
+
+
+def load_clustered_data(transaction_type: str):
+    """
+    Load clustered CSV data and create train/test split.
+
+    Args:
+        transaction_type: 'rent' or 'sale'
+
+    Returns:
+        X_train, X_test, y_train, y_test
+    """
+    if transaction_type not in ("rent", "sale"):
+        raise ValueError("transaction_type must be 'rent' or 'sale' for clustered data")
+
+    data_path = BASE_DIR / "data" / "processed" / f"{transaction_type}_clustered.csv"
+    if not data_path.exists():
+        raise FileNotFoundError(f"Clustered data not found: {data_path}")
+
+    print(f"\n📂 Loading CLUSTERED {transaction_type.upper()} data...")
+    df = pd.read_csv(data_path)
+
+    if "price" not in df.columns:
+        raise KeyError("Clustered dataset must include 'price' column")
+
+    # Features and target
+    drop_cols = ["price", "price_normalized", "city", "region"]
+    feature_df = df.drop(columns=[c for c in drop_cols if c in df.columns]).copy()
+
+    # Categorical columns to one-hot encode (only price_segment and property_type, NOT city/region)
+    cat_cols = [c for c in ["price_segment", "property_type"] if c in feature_df.columns]
+    feature_df = pd.get_dummies(feature_df, columns=cat_cols, drop_first=False)
+
+    X = feature_df.values
+    y = df["price"].values
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=RANDOM_STATE
+    )
+
+    print(f"✅ Loaded CLUSTERED {transaction_type.upper()} data:")
+    print(f"   Train: {X_train.shape[0]:,} samples × {X_train.shape[1]} features")
+    print(f"   Test:  {X_test.shape[0]:,} samples × {X_test.shape[1]} features")
+    print(f"   Price range: {y_train.min():.0f} - {y_train.max():.0f} TND")
+
+    return X_train, X_test, y_train, y_test
 
 
 def load_preprocessed_data(transaction_type=None):
@@ -81,6 +146,11 @@ def load_preprocessed_data(transaction_type=None):
     mode = DATA_MODE
     if mode == "auto":
         mode = detect_dataset_mode(DATA_DIR)
+
+    if mode == "clustered":
+        if transaction_type in (None, "combined"):
+            raise ValueError("Clustered mode requires transaction_type 'rent' or 'sale'")
+        return load_clustered_data(transaction_type)
 
     if mode == "combined" or transaction_type in (None, "combined"):
         label = "COMBINED"
