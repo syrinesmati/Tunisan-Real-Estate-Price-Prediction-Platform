@@ -42,7 +42,7 @@ def load_clustered_data_clean(transaction_type: str):
     """
     Load data and remove extreme outliers (top/bottom 2% of prices)
     """
-    data_path = BASE_DIR / "data" / "processed" / f"{transaction_type}_clustered.csv"
+    data_path = BASE_DIR / "data" / "new" / f"{transaction_type}_clustered.csv"
     
     if not data_path.exists():
         raise FileNotFoundError(f"Clustered data not found: {data_path}")
@@ -64,9 +64,9 @@ def load_clustered_data_clean(transaction_type: str):
     # Target variable
     y = df["price"].values
     
-    # Features (keep only the most important ones)
-    feature_cols = ["city", "region", "surface", "rooms", "bathrooms", "property_type", "price_segment"]
-    feature_cols = [col for col in feature_cols if col in df.columns]
+    # Features (exclude price and all price-derived columns to prevent data leakage)
+    exclude_cols = ["price", "transaction", "price_normalized","price_segment"]
+    feature_cols = [col for col in df.columns if col not in exclude_cols]
     feature_df = df[feature_cols].copy()
     
     # Lightweight feature engineering
@@ -75,7 +75,7 @@ def load_clustered_data_clean(transaction_type: str):
     feature_df["avg_room_size"] = df["surface"] / (df["rooms"] + 1)
     
     # ONE-HOT encode
-    cat_cols = [c for c in ["city", "region", "property_type", "price_segment"] if c in feature_df.columns]
+    cat_cols = [c for c in ["region", "property_type"] if c in feature_df.columns]
     feature_df = pd.get_dummies(feature_df, columns=cat_cols, drop_first=False)
     
     X = feature_df.values
