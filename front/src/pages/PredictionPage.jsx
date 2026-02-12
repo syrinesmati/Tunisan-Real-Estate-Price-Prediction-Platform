@@ -16,10 +16,21 @@ export default function PredictionPage() {
     setError(null)
 
     try {
+      const propertyPayload = {
+        ...propertyData,
+        governorate: propertyData.region,
+        area: propertyData.surface,
+        has_elevator: propertyData.has_ascenseur,
+        has_parking: propertyData.has_garage,
+        has_garden: propertyData.has_jardin,
+        has_pool: propertyData.has_piscine,
+        is_furnished: propertyData.is_meuble,
+      }
+
       const requestData = {
         user_role: userRole,
         property_features: {
-          ...propertyData,
+          ...propertyPayload,
           transaction_type: transactionType,
         },
       }
@@ -30,7 +41,7 @@ export default function PredictionPage() {
       navigate('/results', {
         state: {
           prediction: response.data,
-          propertyData,
+          propertyData: requestData.property_features,
           userRole,
         },
       })

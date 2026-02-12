@@ -1,22 +1,50 @@
+import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
+import cityByRegion from '../data/cityByRegion.json'
+import priceSegmentByRegion from '../data/priceSegmentByRegion.json'
 
-const tunisianGovernorates = [
-  'Tunis', 'Ariana', 'Ben Arous', 'Manouba', 'Nabeul', 'Zaghouan', 'Bizerte',
-  'Béja', 'Jendouba', 'Kef', 'Siliana', 'Sousse', 'Monastir', 'Mahdia',
-  'Sfax', 'Kairouan', 'Kasserine', 'Sidi Bouzid', 'Gabès', 'Medenine',
-  'Tataouine', 'Gafsa', 'Tozeur', 'Kebili'
-]
+const regionOptions = Object.keys(priceSegmentByRegion).sort((a, b) =>
+  a.localeCompare(b, 'fr', { sensitivity: 'base' })
+)
 
 const propertyTypes = [
   'apartment', 'house', 'villa', 'studio', 'duplex', 'land', 'commercial'
 ]
 
+const computePriceSegment = (region) => {
+  if (region && priceSegmentByRegion[region]) {
+    return priceSegmentByRegion[region]
+  }
+
+  return 'Medium'
+}
+
 export default function PropertyForm({ onSubmit, isLoading, userRole }) {
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm()
+
+  const region = watch('region')
+  const priceSegment = useMemo(() => computePriceSegment(region), [region])
+  const cityValue = useMemo(() => {
+    if (!region) {
+      return ''
+    }
+
+    return cityByRegion[region] || ''
+  }, [region])
+
+  useEffect(() => {
+    setValue('price_segment', priceSegment, { shouldValidate: true })
+  }, [priceSegment, setValue])
+
+  useEffect(() => {
+    setValue('city', cityValue, { shouldValidate: true })
+  }, [cityValue, setValue])
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="card space-y-6">
@@ -26,21 +54,21 @@ export default function PropertyForm({ onSubmit, isLoading, userRole }) {
       <div className="grid md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">
-            Governorate <span className="text-red-500">*</span>
+            Region <span className="text-red-500">*</span>
           </label>
           <select
-            {...register('governorate', { required: 'Governorate is required' })}
+            {...register('region', { required: 'Region is required' })}
             className="input"
           >
-            <option value="">Select governorate</option>
-            {tunisianGovernorates.map((gov) => (
-              <option key={gov} value={gov}>
-                {gov}
+            <option value="">Select region</option>
+            {regionOptions.map((regionOption) => (
+              <option key={regionOption} value={regionOption}>
+                {regionOption}
               </option>
             ))}
           </select>
-          {errors.governorate && (
-            <p className="text-red-500 text-sm mt-1">{errors.governorate.message}</p>
+          {errors.region && (
+            <p className="text-red-500 text-sm mt-1">{errors.region.message}</p>
           )}
         </div>
 
@@ -52,7 +80,9 @@ export default function PropertyForm({ onSubmit, isLoading, userRole }) {
             type="text"
             {...register('city', { required: 'City is required' })}
             className="input"
-            placeholder="Enter city"
+            placeholder="City auto-selected"
+            value={cityValue}
+            readOnly
           />
           {errors.city && (
             <p className="text-red-500 text-sm mt-1">{errors.city.message}</p>
@@ -60,7 +90,7 @@ export default function PropertyForm({ onSubmit, isLoading, userRole }) {
         </div>
       </div>
 
-      {/* Property Type & Area */}
+      {/* Property Type & Surface */}
       <div className="grid md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">
@@ -84,26 +114,26 @@ export default function PropertyForm({ onSubmit, isLoading, userRole }) {
 
         <div>
           <label className="block text-sm font-medium mb-1">
-            Area (m²) <span className="text-red-500">*</span>
+            Surface (m²) <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
             step="0.1"
-            {...register('area', {
-              required: 'Area is required',
-              min: { value: 1, message: 'Area must be positive' },
+            {...register('surface', {
+              required: 'Surface is required',
+              min: { value: 1, message: 'Surface must be positive' },
             })}
             className="input"
             placeholder="e.g., 120"
           />
-          {errors.area && (
-            <p className="text-red-500 text-sm mt-1">{errors.area.message}</p>
+          {errors.surface && (
+            <p className="text-red-500 text-sm mt-1">{errors.surface.message}</p>
           )}
         </div>
       </div>
 
       {/* Rooms */}
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">Total Rooms</label>
           <input
@@ -111,16 +141,6 @@ export default function PropertyForm({ onSubmit, isLoading, userRole }) {
             {...register('rooms', { min: 0 })}
             className="input"
             placeholder="e.g., 4"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Bedrooms</label>
-          <input
-            type="number"
-            {...register('bedrooms', { min: 0 })}
-            className="input"
-            placeholder="e.g., 2"
           />
         </div>
 
@@ -135,27 +155,19 @@ export default function PropertyForm({ onSubmit, isLoading, userRole }) {
         </div>
       </div>
 
-      {/* Additional Details */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Floor Number</label>
-          <input
-            type="number"
-            {...register('floor', { min: 0 })}
-            className="input"
-            placeholder="e.g., 3"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Construction Year</label>
-          <input
-            type="number"
-            {...register('construction_year', { min: 1900, max: 2030 })}
-            className="input"
-            placeholder="e.g., 2020"
-          />
-        </div>
+      {/* Price Segment (Auto) */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Price Segment</label>
+        <input
+          type="text"
+          value={priceSegment}
+          readOnly
+          className="input bg-gray-50 text-gray-600 cursor-not-allowed"
+        />
+        <input type="hidden" {...register('price_segment')} />
+        <p className="text-xs text-gray-500 mt-1">
+          Calculated automatically from the selected region.
+        </p>
       </div>
 
       {/* Features Checkboxes */}
@@ -163,28 +175,43 @@ export default function PropertyForm({ onSubmit, isLoading, userRole }) {
         <label className="block text-sm font-medium mb-3">Features</label>
         <div className="grid md:grid-cols-3 gap-4">
           <label className="flex items-center space-x-2">
-            <input type="checkbox" {...register('has_elevator')} className="rounded" />
-            <span>Elevator</span>
+            <input type="checkbox" {...register('has_ascenseur')} className="rounded" />
+            <span>Ascenseur</span>
           </label>
 
           <label className="flex items-center space-x-2">
-            <input type="checkbox" {...register('has_parking')} className="rounded" />
-            <span>Parking</span>
+            <input type="checkbox" {...register('has_garage')} className="rounded" />
+            <span>Garage</span>
           </label>
 
           <label className="flex items-center space-x-2">
-            <input type="checkbox" {...register('has_garden')} className="rounded" />
-            <span>Garden</span>
+            <input type="checkbox" {...register('has_jardin')} className="rounded" />
+            <span>Jardin</span>
           </label>
 
           <label className="flex items-center space-x-2">
-            <input type="checkbox" {...register('has_pool')} className="rounded" />
-            <span>Pool</span>
+            <input type="checkbox" {...register('has_piscine')} className="rounded" />
+            <span>Piscine</span>
           </label>
 
           <label className="flex items-center space-x-2">
-            <input type="checkbox" {...register('is_furnished')} className="rounded" />
-            <span>Furnished</span>
+            <input type="checkbox" {...register('is_meuble')} className="rounded" />
+            <span>Meuble</span>
+          </label>
+
+          <label className="flex items-center space-x-2">
+            <input type="checkbox" {...register('has_terrasse')} className="rounded" />
+            <span>Terrasse</span>
+          </label>
+
+          <label className="flex items-center space-x-2">
+            <input type="checkbox" {...register('has_chauffage')} className="rounded" />
+            <span>Chauffage</span>
+          </label>
+
+          <label className="flex items-center space-x-2">
+            <input type="checkbox" {...register('has_climatisation')} className="rounded" />
+            <span>Climatisation</span>
           </label>
         </div>
       </div>
