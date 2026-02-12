@@ -6,35 +6,23 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.api import prediction, recommendations
-from app.api import combined_prediction
+from app.api import recommendations, rent_prediction
 from app.core.config import settings
-from app.ml.model_manager import ModelManager
-from app.ml.combined_predictor import combined_model_service
-
-# Initialize model manager
-model_manager = ModelManager()
-
+from app.ml.rent_model_service import rent_model_service
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     # Startup: Load ML models
     print("🚀 Loading ML models...")
-    
-    # Load combined model (new approach - simpler and more accurate)
+
+    # Load train5 rent model
     try:
-        combined_model_service.load()
-        print("✅ Combined model loaded successfully!")
+        rent_model_service.load()
+        print("✅ Train5 rent model loaded successfully!")
     except Exception as e:
-        print(f"⚠️ Warning: Could not load combined model: {e}")
+        print(f"⚠️ Warning: Could not load train5 rent model: {e}")
     
-    # Load legacy models if needed
-    try:
-        model_manager.load_models()
-        print("✅ Legacy models loaded successfully!")
-    except Exception as e:
-        print(f"⚠️ Warning: Could not load legacy models: {e}")
     
     yield
     
@@ -59,9 +47,8 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(prediction.router, prefix="/api/v1/prediction", tags=["Prediction"])
-app.include_router(combined_prediction.router, prefix="/api/v1/combined", tags=["Combined Model"])
 app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["Recommendations"])
+app.include_router(rent_prediction.router, prefix="/api/v1/rent", tags=["Rent Model (train5)"])
 
 
 @app.get("/")
@@ -79,7 +66,7 @@ async def health_check():
     """Detailed health check"""
     return {
         "status": "healthy",
-        "models_loaded": model_manager.is_loaded(),
+        "rent_model_loaded": rent_model_service.loaded,
         "api_version": "1.0.0"
     }
 

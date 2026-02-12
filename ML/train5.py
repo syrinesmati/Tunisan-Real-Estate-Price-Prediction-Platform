@@ -1,3 +1,5 @@
+import os
+from datetime import datetime
 import warnings
 from pathlib import Path
 
@@ -5,8 +7,13 @@ import mlflow
 import mlflow.sklearn
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+try:
+    import matplotlib.pyplot as plt
+    HAS_PLOTS = True
+except Exception:
+    plt = None
+    HAS_PLOTS = False
+import joblib
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
@@ -35,8 +42,8 @@ def load_data() -> pd.DataFrame:
 
 
 def prepare_features(df: pd.DataFrame):
-    target_col = "price_normalized"
-    X = df.drop(columns=[target_col, "price", "property_type_cluster"])
+    target_col = "price"
+    X = df.drop(columns=[target_col, "price_normalized", "property_type_cluster"])
     y = df[target_col]
 
     numeric_cols = ["surface", "rooms", "bathrooms"]
@@ -191,6 +198,9 @@ def evaluate_models(trained_pipelines, X_test, y_test):
 
 
 def visualize_results(results_df, trained_pipelines, X_test, y_test):
+    if not HAS_PLOTS:
+        print("⚠ Skipping plots (matplotlib not available)")
+        return
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
     results_sorted = results_df.sort_values("RMSE")
@@ -293,8 +303,27 @@ def visualize_results(results_df, trained_pipelines, X_test, y_test):
     plt.show()
 
 
-def log_with_mlflow(trained_pipelines, X_test, y_test, X_train, target_col):
-    mlflow.set_experiment("real_estate_rent_regression")
+def save_best_model(results_df, trained_pipelines):
+    best_model_name = results_df.sort_values("RMSE").iloc[0]["Model"]
+    best_pipeline = trained_pipelines[best_model_name]
+
+    base_dir = Path(__file__).resolve().parent
+    output_dir = (base_dir.parent / "back" / "models" / "rent_model").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    model_path = output_dir / "model.pkl"
+
+    joblib.dump(best_pipeline, model_path)
+    print(f"✓ Best model saved to: {model_path}")
+
+
+def log_with_mlflow(trained_pipelines, X_test, y_test, X_train, target_col, experiment_name):
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment(experiment_name)
+
+    print(f"MLflow tracking URI: {mlflow.get_tracking_uri()}")
+    if tracking_uri.startswith("file:"):
+        print(f"MLflow tracking directory: {Path('mlruns').resolve()}")
 
     print("Logging RENT experiments to MLflow...\n")
 
@@ -346,7 +375,9 @@ def main():
     trained_pipelines = train_models(models, preprocessor, X_train, y_train)
     results_df = evaluate_models(trained_pipelines, X_test, y_test)
     visualize_results(results_df, trained_pipelines, X_test, y_test)
-    log_with_mlflow(trained_pipelines, X_test, y_test, X_train, target_col)
+    save_best_model(results_df, trained_pipelines)
+    experiment_name = f"real_estate_rent_regression_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    log_with_mlflow(trained_pipelines, X_test, y_test, X_train, target_col, experiment_name)
 
 
 if __name__ == "__main__":
