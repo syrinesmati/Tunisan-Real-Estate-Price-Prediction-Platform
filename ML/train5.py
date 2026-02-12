@@ -7,8 +7,12 @@ import mlflow
 import mlflow.sklearn
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+try:
+    import matplotlib.pyplot as plt
+    HAS_PLOTS = True
+except Exception:
+    plt = None
+    HAS_PLOTS = False
 import joblib
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
@@ -38,8 +42,8 @@ def load_data() -> pd.DataFrame:
 
 
 def prepare_features(df: pd.DataFrame):
-    target_col = "price_normalized"
-    X = df.drop(columns=[target_col, "price", "property_type_cluster"])
+    target_col = "price"
+    X = df.drop(columns=[target_col, "price_normalized", "property_type_cluster"])
     y = df[target_col]
 
     numeric_cols = ["surface", "rooms", "bathrooms"]
@@ -194,6 +198,9 @@ def evaluate_models(trained_pipelines, X_test, y_test):
 
 
 def visualize_results(results_df, trained_pipelines, X_test, y_test):
+    if not HAS_PLOTS:
+        print("⚠ Skipping plots (matplotlib not available)")
+        return
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
     results_sorted = results_df.sort_values("RMSE")
